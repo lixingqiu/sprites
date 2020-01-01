@@ -118,7 +118,7 @@ from copy import deepcopy
 from winsound import PlaySound,SND_ASYNC
 from turtle import TK,_Root,_CFG ,TNavigator,Tbuffer,TPen,_Screen,Screen,Turtle,Vec2D, RawTurtle,TurtleScreenBase,Shape,TurtleScreen,_TurtleImage,TurtleGraphicsError 
 
-_VERSION = 1.0
+_VERSION = 1.01
 _CFG['delay'] = 0
 # 定义资源文件夹
 _resfld = os.path.join(os.getcwd(),'res')
@@ -131,11 +131,12 @@ def _set_im_alpha(im,alpha):
        黑边问题待解决！
     """
     array = np.array(im)   
-    a =  array[:,:,3:]        
-    a = np.where(a>0,alpha,0)   
-    array[:,:,3:] = a         
+    a =  array[:,:,3:]        # 提取透明通道所有值
+    a = np.where(a>0,alpha,0) # 如果透明度大于0,则设为alpha,否则为0    
+    array[:,:,3:] = a         # 把array的透明度全部改为a
     return Image.fromarray(array)
 
+# 重定义Tpen类的_reset方法,让精灵实例化时不落笔
 def TPen_reset(self, pencolor=_CFG["pencolor"],
                  fillcolor=_CFG["fillcolor"]):
     self._pensize = 1
@@ -151,14 +152,14 @@ def TPen_reset(self, pencolor=_CFG["pencolor"],
     self._outlinewidth = 1
 TPen._reset = TPen_reset
 
-
+# 重定义_Root类的初始化方法
 def _Rootinit(self):
     TK.Tk.__init__(self)
     self.resizable(0,0)
     
 _Root.__init__ = _Rootinit  
 
-
+# 重定义原生海龟的初始化方法
 def RawTurtle__init__(self, canvas=None,
              shape=_CFG["shape"],
              undobuffersize=_CFG["undobuffersize"],
@@ -197,12 +198,15 @@ def RawTurtle__init__(self, canvas=None,
     self.stampItems = []
     self._undobuffersize = undobuffersize
     self.undobuffer = Tbuffer(undobuffersize)
-    self._tag = 'turtle'    
-    self._alpha = 255                 
+    self._tag = 'turtle'       # 增加的属性,贴一个标签
+    # 对于多边形和复合图形来说大于0的数都是不透明
+    # 对于图像来说则是透明度,0为透明,255为不透明
+    self._alpha = 255                  #  初始为不透明
     self._update()
     
 RawTurtle.__init__ = RawTurtle__init__
 
+# 给原生海龟增加update方法，为的是能单独渲染一个角色
 def RawTurtle_update(self):
     """重画自己"""
     tracing = self.screen._tracing
@@ -213,6 +217,7 @@ def RawTurtle_update(self):
     self.screen._tracing = tracing
 RawTurtle.update = RawTurtle_update
 
+# 重定义原生海龟的_drawturtle方法
 def RawTurtle_drawturtle(self):
     """根据倾斜角度，伸展因子，重调模式等重新渲染海龟对象的外形。"""
     screen = self.screen
@@ -228,6 +233,8 @@ def RawTurtle_drawturtle(self):
             else: w =self._outlinewidth
             shape = self._polytrafo(self._getshapepoly(tshape))
             fc, oc = self._fillcolor, self._pencolor
+            # 如果alpha值，即透明度为0，则没有填充颜色和线宽，这样就看不到海龟的外形了。
+            # 但又把它“画”了出来，这样绑定盒命令就能获取正确的值。如果隐藏，就获取不到了。
             if self._alpha == 0 :
                fc = ""
                w = 0
@@ -239,6 +246,7 @@ def RawTurtle_drawturtle(self):
         elif ttype == "compound":
             for item, (poly, fc, oc) in zip(titem, tshape):
                 poly = self._polytrafo(self._getshapepoly(poly, True))
+                # 如果alpha值即透明度为0，则无填充颜色和线宽，这样就看不到海龟的外形了。
                 if self._alpha == 0 :
                     screen._drawpoly(item, poly, fill="",
                                  outline=0, width=0, top=True)
@@ -259,6 +267,7 @@ def RawTurtle_drawturtle(self):
         self._hidden_from_screen = True
 RawTurtle._drawturtle = RawTurtle_drawturtle
             
+# 给原生海龟对象增加move方法
 def _move(self,dx=0,dy=0):
     """移动水平dx,垂直dy的距离"""
     x = self.xcor() + dx
@@ -267,6 +276,7 @@ def _move(self,dx=0,dy=0):
     self._update()
 RawTurtle.move = _move
 
+# 给原生海龟对象增加play方法
 def RawTurtle_play(self,song_file,lrc_file=None,fontstyle=("",24,"normal") ):
     """在海龟屏幕显示歌词并播放歌曲，本函数只支持无损wav文件。
        self：海龟对象或其子类的实例
@@ -276,26 +286,26 @@ def RawTurtle_play(self,song_file,lrc_file=None,fontstyle=("",24,"normal") ):
        上面这样的歌词文件。
        fontstyle为三元组，表示用write写字时的字体风格。
     """
-    PlaySound(song_file, SND_ASYNC)   
-    if lrc_file==None:return           
+    PlaySound(song_file, SND_ASYNC)    # 异步播放音效
+    if lrc_file==None:return           # 无歌词文件则返回
     
-    f = open(lrc_file)                 
-    words_=f.readlines()               
-    f.close()                       
+    f = open(lrc_file)                 # 打开歌词文件
+    words_=f.readlines()               # 读取歌词文件
+    f.close()                          # 关闭文件
     
-    
+    # 正则表达式检测歌词文件内容
     reg='\[\d\d:\d\d\.\d\d\]'
-    result = re.findall(reg,"".join(words_))   
+    result = re.findall(reg,"".join(words_))   # 如果有[00:00.33]这样的则会返回非空列表
     if not result:
        print("歌词文件貌似有问题!")
        return
      
-    x,y = self.position()              
-    fgcolor = self.pencolor()          
-    bgcolor = self.fillcolor()         
+    x,y = self.position()              # 歌词中央坐标
+    fgcolor = self.pencolor()          # 歌词前景色 
+    bgcolor = self.fillcolor()         # 歌词背景色
    
-    words_list=[]                      
-    words_index=0                      
+    words_list=[]                      # 歌词列表
+    words_index=0                      # 歌词索引
 
     words_list=[ line.strip() for line in words_ if len(line)>1]
     words_lines=len(words_list)        
@@ -314,17 +324,17 @@ def RawTurtle_play(self,song_file,lrc_file=None,fontstyle=("",24,"normal") ):
     begin_time=time.time()
     def display_subtitle():
         """随着音乐显示歌词函数"""
-        nonlocal words_index            
-        nonlocal words_lines                     
+        nonlocal words_index            # 歌词索引号
+        nonlocal words_lines            # 歌词line数          
         current_time=time.time()
         running_time=(current_time-begin_time)*1000
-        
+        # 如果逝去的时间大于歌词文件中那个时间点就换歌词
         if running_time > get_time_axis(words_index):
             self.clear()
             display_words_=words_list[words_index].split("]")[1]
             self.goto(x,y)
             self.color(bgcolor)
-           
+            # 在左上一个单位印字
             self.write(display_words_,align='center',font=fontstyle)
             self.goto(x-1,y+1)
             self.color(fgcolor)
@@ -332,7 +342,7 @@ def RawTurtle_play(self,song_file,lrc_file=None,fontstyle=("",24,"normal") ):
             words_index=words_index+1            
         if words_index<words_lines:        
             self.screen.ontimer(display_subtitle,100)
-    
+    # 调用显示标题的函数
     display_subtitle()
 RawTurtle.play = RawTurtle_play
     
@@ -386,12 +396,12 @@ def _writea(self, arg, move=False, align="left", font=("黑体",12,"normal"),ang
         self.setpos(end, y)
     if self.undobuffer:
         self.undobuffer.cumulate = False
-    return item                   
+    return item                   # 这里本来不返回item
 
-RawTurtle._write = _write        
-RawTurtle.write = _writea        
+RawTurtle._write = _write         # 重定义_write
+RawTurtle.write = _writea         # 重定义write
 
-
+# 重定义TurtleScreen的监听
 def TurtleScreen_listen(self, xdummy=None, ydummy=None):
         """为了收集按键事件而在海龟屏幕上设置焦点。_focus是跟踪屏幕是否在最前面的逻辑变量。
         """
@@ -415,10 +425,11 @@ def _Screen__init__(self):
           self._root.setupcanvas(width, height, canvwidth, canvheight)
           _Screen._canvas = self._root._getcanvas()
           TurtleScreen.__init__(self, _Screen._canvas)
-          self.setup(width, height, leftright, topbottom)          
-      
-      self._groups = []           
-      self._focus = True          
+          self.setup(width, height, leftright, topbottom)
+          
+      # 屏幕的_groups属性是保存组名的
+      self._groups = []           # 这里给screen增加了_groups属性
+      self._focus = True          # 描述窗口是否失去焦点的逻辑属性
       self._root.bind("<FocusIn>", self.got_focus)
       self._root.bind("<FocusOut>", self.lost_focus)
       
@@ -443,6 +454,7 @@ def _image(filename):
 
 TurtleScreenBase._image = _image
 
+# 以下重定义TurtleScreen的初始化方法
 def TurtleScreen__init__(self, cv, mode=_CFG["mode"],
              colormode=_CFG["colormode"], delay=_CFG["delay"]):
     self._shapes = {
@@ -493,6 +505,8 @@ def TurtleScreen__init__(self, cv, mode=_CFG["mode"],
         rootwindow.call('wm', 'attributes', '.', '-topmost', '0')
 TurtleScreen.__init__ = TurtleScreen__init__
 
+# 重定义TurtleScreen类里面的register_shape方法
+# 目的是让它支持png等图片
 def _register_shape(self, name, shape=None):
     if shape is None:
         shape = Shape("image", self._image(name))
@@ -503,11 +517,13 @@ def _register_shape(self, name, shape=None):
 TurtleScreen.register_shape = _register_shape
 TurtleScreen.addshape = _register_shape
 
+# 让窗口可以支持自定义缩放,默认是不支持的
 def _resizable(self,width=True,height=True):
         self._root.resizable(width,height)
 
 TurtleScreen.resizable = _resizable
 
+# 重定义Shape类的初始化方法
 def _shape__init__(self, type_, data=None):
     self._type = type_
 
@@ -642,6 +658,8 @@ if not os.path.isfile(os.path.join(_resfld,'b2.png')):
     __b2.save(os.path.join(_resfld,'b2.png'))
     __b2.close()
 
+
+# 以下定义屏幕的鼠标移动事件
 def __onmousemove(self, fun, add=None):
     """绑定鼠标移动事件"""
     
@@ -661,6 +679,7 @@ def _onmousemove(self,fun,add=None):
 TurtleScreenBase.__onmousemove = __onmousemove
 TurtleScreenBase.onmousemove = _onmousemove
 
+# 重定义_drawimage方法
 def _drawimage(self, item, pos, image):
     """在画布x,y坐标重新配置image
     """
@@ -673,7 +692,7 @@ TurtleScreenBase._drawimage = _drawimage
 def mouse_pos():
     """获取相对于海龟屏幕的鼠标指针坐标，和屏幕的缩放参数scale无关。"""    
     if Turtle._screen is None:return
-    screen = Screen()            
+    screen = Screen()            # 返回屏幕对象
     _root = screen._root
     abs_coord_x = _root.winfo_pointerx() - _root.winfo_rootx()
     abs_coord_y = _root.winfo_pointery() - _root.winfo_rooty()
@@ -688,40 +707,47 @@ mousepos = mouse_pos
 getmousepos = mouse_pos
 getmouseposition = mouse_pos
 
+# 给背景增加坐标定位方法
 def _bg_goto(self,x,y):
     """背景坐标定位"""
     self.cv.coords(self._bgpic,(x,-y))    
 TurtleScreen.goto = _bg_goto
 
+# 给背景增加获取x坐标方法
 def _bg_xcor(self):
     """背景x坐标"""
     p = self.cv.coords(self._bgpic)
     return p[0]
 TurtleScreen.xcor = _bg_xcor
 
+# 给背景增加获取y坐标的方法
 def _bg_ycor(self):
     """背景y坐标"""    
     p = self.cv.coords(self._bgpic)
     return -p[1]
 TurtleScreen.ycor = _bg_ycor
 
+# 给背景增加设定x坐标的方法
 def _bg_setx(self,x):
     """设定背景x坐标"""  
     p = self.cv.coords(self._bgpic)
     self.cv.coords(self._bgpic,(x,p[1]))
 TurtleScreen.setx = _bg_setx
 
+# 给背景增加设定y坐标的方法    
 def _bg_sety(self,y):
     """设定背景y坐标"""        
     p = self.cv.coords(self._bgpic)
     self.cv.coords(self._bgpic,(p[0],-y))
 TurtleScreen.sety = _bg_sety
     
+# 给背景增加水平移动dx和垂直移动dy的方法  
 def _bg_move(self,dx,dy):
     """用于在水平和垂直方向上移动背景,如果dy为0那么只是在水平方向上移动背景"""
     self.cv.move(self._bgpic,dx,-dy)
 TurtleScreen.move = _bg_move
 
+# 给背景增加获取绑定盒子的方法
 def _bg_bbox(self):
     """获取背景的绑定盒子"""
     b = self.cv.bbox(self._bgpic) # left,top,right,bottom
@@ -729,6 +755,7 @@ def _bg_bbox(self):
 TurtleScreen.bbox = _bg_bbox
 
 
+# 以下定义屏幕的鼠标松开事件
 def __onscreenrelease(self, fun, num=1, add=None):
     """绑定鼠标的松开事件，默认为鼠标左键，即num为1。
  
@@ -751,6 +778,7 @@ TurtleScreenBase.__onscreenrelease = __onscreenrelease
 TurtleScreenBase.onscreenrelease = _onscreenrelease
 
 
+# 以下重定义TurtleScreen的reset方法
 def __TSreset(self):
     """重置除了说话泡泡海龟外的对象到初始状态。    
     """
@@ -760,6 +788,7 @@ def __TSreset(self):
            turtle.reset()
 TurtleScreen.reset = __TSreset
 
+# 缩放矩形函数
 def _scale_rect(sourcerect,scale):
     """缩放矩形，按比例对源矩形进行放大或缩小
        sourcerect：源矩形，4元组，左上角和右下角坐标
@@ -778,6 +807,7 @@ def _scale_rect(sourcerect,scale):
 
     return x1,y1,x2,y2
   
+# 产生一个颜色表，里面的颜色较鲜艳
 def makecolors(n=128):
         
     """产生颜色表，饱和度和亮度最高，所以很鲜艳"""
@@ -790,7 +820,7 @@ def makecolors(n=128):
     cs = ["#{:02x}{:02x}{:02x}".format(r,g,b) for r,g,b in cs]
     cs = list(set(cs))
     return cs
-_colorlist = makecolors()    
+_colorlist = makecolors()    # 产生一个颜色表
 
         
 class Group(set):
@@ -798,10 +828,10 @@ class Group(set):
   def __init__(self,tag):
     self._tag = tag
     if Turtle._screen  is None:
-      self.screen = Screen()       
+      self.screen = Screen()        # 如果没有窗口则新建一个窗口
     else:
       self.screen = Turtle._screen      
-    self.screen._groups.append(self) 
+    self.screen._groups.append(self) # 注意把组添加到了_groups列表中
     self.rebuild()
       
   def rebuild(self):
@@ -823,7 +853,7 @@ class Clock:
 
         if fps!=0:
             step = 1/fps
-            if elapsed_time < step:  
+            if elapsed_time < step:  # 如果逝去的时间小于step则等待
                time.sleep(step - elapsed_time)
             
         self._old_start_time = self._start_time
@@ -835,6 +865,7 @@ class Clock:
         t = time.perf_counter() - self._old_start_time
         return round(1/t,2)
 
+# 产生爆炸效果的函数，需要传递图像帧
 def explode(pos,frames,interval=100):
     """
        本函数新建海龟对象，然后把它的造型依次显示为frames中的图形。
@@ -845,17 +876,17 @@ def explode(pos,frames,interval=100):
 
     if Turtle._screen is None:return
     if isinstance(frames,str):frames=[frames]
-    screen = Screen()            
-    [screen.addshape(im) for im in frames]  
-    t = Turtle(visible=False)        
-    t.penup()                        
-    t.speed(0)                       
-    t.goto(pos)                      
-    t.st()                           
-    t.index = 0                      
-    t.frames = frames                
-    t.amounts = len(frames)          
-    def animation():                      
+    screen = Screen()            # 返回屏幕对象
+    [screen.addshape(im) for im in frames]  # 没有注册此形状则注册
+    t = Turtle(visible=False)        # 实例化一个对象
+    t.penup()                        # 抬起笔来
+    t.speed(0)                       # 速度为最快
+    t.goto(pos)                      # 坐标定位置
+    t.st()                           # 显示出来
+    t.index = 0                      # 表示造型索引
+    t.frames = frames                # 所有造型
+    t.amounts = len(frames)          # 造型数量
+    def animation():                 # 切换动画函数        
         if t.index < t.amounts:            
             t.shape(t.frames[t.index])
             t.index = t.index + 1
@@ -887,10 +918,10 @@ class Sprite(Turtle):
            shape：造型图像(int或str)，pos：起始坐标，visible：可见性，undobuffersize：可撤销次数,tag:标签。
            新建一个精灵，默认为小虫子，在屏幕中央。
         """        
-        self._initend = False                           
+        self._initend = False                           # 表示初始化开始
         Turtle.__init__(self,visible=False,undobuffersize=undobuffersize,shape='blank')
-        self._rotatemode = 0                            
-        self._im = None                                
+        self._rotatemode = 0                            # 设定旋转模式，0:360度旋转,1:左右翻转,2:不旋转
+        self._im = None                                 # 存储当前原始图形的im属性      
         
         if isinstance(shape,int):
            shape = min(len(_built_in_images)-1, max(0, shape))
@@ -899,49 +930,55 @@ class Sprite(Turtle):
         elif isinstance(shape,str):
              if shape not in self.screen._shapes and not os.path.isfile(shape): shape='turtle'
              self._costumes = [shape] 
-        elif isinstance(shape,tuple) or isinstance(shape,list): 
+        elif isinstance(shape,tuple) or isinstance(shape,list): # 如果传入的是序列
              self._costumes = shape                              
             
         shape = self._costumes[0]
-        self._costumes_amounts = len(self._costumes)    
-        self._costume_index = 0                         
+        self._costumes_amounts = len(self._costumes)    # 造型数量
+        self._costume_index = 0                         # 角色的初始造型索引号
         self._position = Vec2D(*pos)
          
         self.shape(shape)        
         
         if visible :
            self.st()
+        # 之所有加下面的是由于在隐藏状态下不会在新坐标重画造型
+        # 即当实例化Sprite(visible=False,pos=(100,100))时，角色不会到pos的坐标
+        # 只是由于它是隐藏的,_drawturtle方法由于_shown是False,就不会在新坐标重画
+        # 加下面的代码首先把_shown打开，然后让它为透明状态。这样会在新坐标重渲染
+        # 最后改回_shown的False状态和_alpha值为缺省值。
         else:           
            self._shown = True                          
            self._rotate(0)
-           #self.set_alpha(0)                            
+           #self.set_alpha(0)                            # 这样就能在新坐标重画
            self._shown = False
-           #self.set_alpha(255)                             
+           #self.set_alpha(255)                             # 重新设为缺省的255 
                    
         self.onclick(self._store, 1)    
         self.ondrag(self.drag,1)       
       
-        self._sayend = True                              
-        self._saycolor = "#303030"                       
-        self._saybordercolor = "#CCCCCC"                         
-        self._draw_bubble_turtle = Turtle(visible=False) 
-        self.screen._turtles.remove(self._draw_bubble_turtle) 
-        self._draw_bubble_turtle.up()                            
-        self._draw_bubble_turtle.speed(0)                      
+        self._sayend = True                              # 初始状态的说话结束 
+        self._saycolor = "#303030"                       # 说话的字的颜色
+        self._saybordercolor = "#CCCCCC"                 # 说话的字的泡泡边框的颜色        
+        self._draw_bubble_turtle = Turtle(visible=False) # 用来画框写字的龟
+        self.screen._turtles.remove(self._draw_bubble_turtle) # 又从总表中移除
+        self._draw_bubble_turtle.up()                    # 抬起笔来        
+        self._draw_bubble_turtle.speed(0)                # 速度最快        
         self._draw_bubble_turtle.pensize(3)        
-        self._draw_bubble_turtle._tag = 'bubble'         
-        self.set_tag(tag)                               
-        self._initend = True                             
+        self._draw_bubble_turtle._tag = 'bubble'         # 标志为说话泡泡海龟
+        self.set_tag(tag)                                # 设置标签
+        self._initend = True                             # 表示初始化结束
         
     def set_alpha(self,alpha,delay=None):
          """设置alpha值，它是从0到255的值。
             表示图像的透明度，如果不是图像，0代表透明，非0代表不透明。
             如果delay被设置，那么角色在相应时间又会恢复原来的透明度。
           """
-         self._oldalpha = self._alpha                   
+         self._oldalpha = self._alpha                   # 记录当前透明度
          alpha = int(min(255, max(0, alpha)))
          self._alpha = alpha
-         self._rotate(0)         
+         self._rotate(0)
+         # 下面设置当delay有数值的时候让角色过一段时间又恢复原来的透明度
          if delay!=None:
             self.screen.ontimer(lambda:self.set_alpha(self._oldalpha),int(abs(delay)*1000))
 
@@ -953,7 +990,7 @@ class Sprite(Turtle):
         """给精灵设置标签,并添加到相应的分表"""
         self._tag = tag
         [group.add(self) for group in self.screen._groups
-         if self._tag == group._tag]                      
+         if self._tag == group._tag]               # 实例化时自动添加到相应组         
           
     def get_tag(self):
         """返回角色的标签""" 
@@ -1008,30 +1045,33 @@ class Sprite(Turtle):
     def _loadim(self,image):
         # 原始图形,最好面向右
         self._costumebasename = os.path.basename(image)
-        if self._costumebasename not in Sprite.imdict:   
+        if self._costumebasename not in Sprite.imdict:   # 不在这个字典中则第一次加载
             self._im = Image.open(image)
             self._im = self._im.convert('RGBA')
             # for rotatemode 
-            im_mirror = ImageOps.mirror(self._im) 
+            im_mirror = ImageOps.mirror(self._im) # 镜像造形
             self.rightleftcostume = [self._im,im_mirror]
             Sprite.imdict[self._costumebasename] = [self._im,im_mirror]           
-        else:                             
-            self._im = Sprite.imdict[self._costumebasename][0]                      
-            self.rightleftcostume =  Sprite.imdict[self._costumebasename] 
+        else:                              # 在这个字典中,则不读文件,直接从字典中取数据
+            self._im = Sprite.imdict[self._costumebasename][0]             # 向右造型            
+            self.rightleftcostume =  Sprite.imdict[self._costumebasename] #  向右向左造型
             
     def _make_shape_name(self,_wid,_len):
          name = "_".join([ _wid,_len, str(self._orient), str(self._alpha) ,self._costumebasename])
          return name
         
     def shape(self,name=None):
-        """重定义shape方法"""        
+        """重定义shape方法"""
+        # 如果名字为空,则返回形状的名称
         if name==None:return Turtle.shape(self,name)
-         
+
+        # 如果是整数，则从内置列表中选择一个 
         if isinstance(name,int):
            name = min(len(_built_in_images)-1, max(0, name))
            name = _built_in_images[name]
            self._loadim(name)
-        
+
+        # 如果名字在形状字典中,而且不是文件.
         if name in self.screen._shapes and not os.path.isfile(name):
             Turtle.shape(self,name)            
             self.onclick(self._store, 1) 
@@ -1041,7 +1081,7 @@ class Sprite(Turtle):
         if os.path.isfile(name):self._loadim(name)
             
         heading = self.heading()           
-        stretch_wid,stretch_len ,w = Turtle.shapesize(self)   
+        stretch_wid,stretch_len ,w = Turtle.shapesize(self)   # 获取缩放值
         new_name = self._make_shape_name(str(stretch_wid),str(stretch_len))
         if os.path.isfile(name):name=new_name
         
@@ -1051,12 +1091,12 @@ class Sprite(Turtle):
                 newheight = max(1,int(self._im.height * stretch_wid))                
                 im = self._im.resize((newwidth,newheight),Image.ANTIALIAS)
                 
-                if self._rotatemode == 0:                    
+                if self._rotatemode == 0:                    # 360度旋转
                    im = im.rotate(heading,expand=1)
                    
-                elif self._rotatemode == 2 :                 
+                elif self._rotatemode == 2 :                 # 不旋转
                    pass
-                elif self._rotatemode == 1:                  
+                elif self._rotatemode == 1:                  # 左右翻转
                      m = self.screen.mode()
                      if m == 'standard' or m == 'world':
                         if heading < 270 and heading > 90:
@@ -1070,7 +1110,7 @@ class Sprite(Turtle):
                            index = 1                   
                      im = self.rightleftcostume[index]
                      im = im.resize((newwidth,newheight),Image.ANTIALIAS)
-                
+                # 根据透明度进行再次修改图形对象
                 if self._alpha != 255:im = _set_im_alpha(im,self._alpha)
                 shape = Shape('image',ImageTk.PhotoImage(im))
                 self.screen.addshape(new_name,shape)
@@ -1088,11 +1128,11 @@ class Sprite(Turtle):
     def _rotate(self,angle):
         """seth,right,left最终都要调用它，所以重写它就行了"""
         
-        Turtle._rotate(self,angle)         
+        Turtle._rotate(self,angle)         # 调用父类的同名方法
         if self.turtle._type in ['polygon','compound']: return
         if self.shape() == 'blank':return        
                  
-        stretch_wid,stretch_len ,w = Turtle.shapesize(self)         
+        stretch_wid,stretch_len ,w = Turtle.shapesize(self)   # 获取缩放值       
         new_name = self._make_shape_name(str(stretch_wid),str(stretch_len))
         self.shape(new_name)        
 
@@ -1132,7 +1172,7 @@ class Sprite(Turtle):
            item：画布上的一个项目(整数或元组)
            scale：缩放系数
         """
-        
+        # 如果item为空,则是获取自己的绑定盒
         if item == None: item = self.turtle._item
 
         xscale = self.screen.xscale
@@ -1144,7 +1184,7 @@ class Sprite(Turtle):
           x0,y0,x1,y1 = box
           left,top,right,bottom = x0/xscale,-y0/yscale,x1/xscale,-y1/yscale
           
-        else:                  
+        else:                  # 否则就是复合图形
           box = []
           for i in item:
             b = self.screen.cv.bbox(i)
@@ -1158,7 +1198,7 @@ class Sprite(Turtle):
             bottom = min( [d for a,b,c,d in box] )
             
         rect1 = left,top,right,bottom
-        if scale!=1:                         
+        if scale!=1:               # 如果缩放系数不是1，那么对矩形进行缩放          
            rect1 = _scale_rect(rect1,scale)
         return rect1
     
@@ -1166,13 +1206,15 @@ class Sprite(Turtle):
         """和其它对象的矩形碰撞检测，
            other：是海龟对象或者一个项目item编号，如图章编号。
            scale：绑定盒的缩放系数
-        """                
+        """        
+        # 自己的左上右下值
         x0,y0,x1,y1 = self.bbox()
         _left0 = x0
         _top0 = y0
         _right0 = x1
         _bottom0 = y1
-        
+
+        # other要么是其它海龟对象，也可以是个图章！
         if isinstance(other,Turtle):                   
            if other not in self.screen._turtles:return
            item = other.turtle._item
@@ -1191,8 +1233,8 @@ class Sprite(Turtle):
         """获取朝向，或者朝向某个对象与坐标位置。"""
         if other == None :
             return Turtle.heading(self)
-        if isinstance(other,Turtle):  
-            x1,y1 = other.position()   
+        if isinstance(other,Turtle):   # 如果other是海龟对象
+            x1,y1 = other.position()   # 获取它的坐标
         elif isinstance(other,tuple) or isinstance(other,list):
             x1,y1 = other
         self.setheading(self.towards(x1,y1))
@@ -1227,43 +1269,44 @@ class Sprite(Turtle):
         self._draw_bubble_turtle.color(self._saybordercolor)
         width = right - left
         centerx = left + width//2
-        self._draw_bubble_turtle.goto(left+r,top)    
+        self._draw_bubble_turtle.goto(left+r,top)    # 1 左上角右偏r点
         self._draw_bubble_turtle.pendown()
-        self._draw_bubble_turtle.goto(right-r,top)   
-        self._draw_bubble_turtle.circle(-r,90)       
-        self._draw_bubble_turtle.goto(right,bottom+r)
-        self._draw_bubble_turtle.circle(-r,90)       
-        self._draw_bubble_turtle.goto(centerx + r*2,bottom) 
+        self._draw_bubble_turtle.goto(right-r,top)   # 2 右上角左偏r点
+        self._draw_bubble_turtle.circle(-r,90)       # 右上角圆角，方向变为向下
+        self._draw_bubble_turtle.goto(right,bottom+r)# 3 右下角上偏r点
+        self._draw_bubble_turtle.circle(-r,90)       # 右下角圆角，方向变为向左
+        self._draw_bubble_turtle.goto(centerx + r*2,bottom) # 4 中下 右偏2r点
         
-        self._draw_bubble_turtle.circle(2*r,90)      
+        self._draw_bubble_turtle.circle(2*r,90)      # 方向变为向下
         self._draw_bubble_turtle.right(180)
-        self._draw_bubble_turtle.circle(2*r,90)      
+        self._draw_bubble_turtle.circle(2*r,90)      # 方向为向左了 
         
-        self._draw_bubble_turtle.goto(left+r,bottom) 
-        self._draw_bubble_turtle.circle(-r,90)       
-        self._draw_bubble_turtle.goto(left,top-r)    
-        self._draw_bubble_turtle.circle(-r,90)       
+        self._draw_bubble_turtle.goto(left+r,bottom) # 5 左下角 右偏r点
+        self._draw_bubble_turtle.circle(-r,90)       # 向右画1/4圆，方向为向上了 
+        self._draw_bubble_turtle.goto(left,top-r)    # 6 左上角 下偏r点
+        self._draw_bubble_turtle.circle(-r,90)       # 向右画1/4圆，方向为向右了
         
         self._draw_bubble_turtle.up()
 
     def _redraw_say(self):
         """重画字和说话泡泡"""
-        self._draw_bubble_turtle.clear()      
+        self._draw_bubble_turtle.clear()      # 擦除以前所说的话
         self.screen.tracer(False)
-        left,top,right,bottom = self.bbox()   
+        left,top,right,bottom = self.bbox()   # 自己的绑定盒子 
         centerx = left + (right - left)//2
         top = top + 40
         self._draw_bubble_turtle.goto(centerx,top)        
-        self._draw_bubble_turtle.color(self._saycolor)          
+        self._draw_bubble_turtle.color(self._saycolor)   # 要说的话的背景色          
         item = self._draw_bubble_turtle.write(self._sayinfo,align='center')
         
-        self._display_bubble(item)           
+        self._display_bubble(item)           # 画说话泡泡框
         self.screen.tracer(True)        
       
     def _wait_say(self):        
         """不断地判断是否改变了坐标,变了就得重画,否则干等"""
         if self._sayend == True : return
-        if time.time() -  self._begin_bubble_time < self._saytime:           
+        if time.time() -  self._begin_bubble_time < self._saytime:
+           # 如果坐标改变了,那么重画说话泡泡和字
            if abs(self.xcor() - self._oldsay_x) > 0 or \
               abs(self.ycor() - self._oldsay_y) > 0 or \
               self.bbox() != self._oldbox :  
@@ -1280,16 +1323,17 @@ class Sprite(Turtle):
     def say(self,info='你好',delay=2,wait=True):
         """在头顶上显示要说的话 ,默认为阻塞进程。"""
         if len(info)<6:info = "  " + info + "  "
-        self._sayend = False          
+        self._sayend = False          # 描述说话是否结束
         self._sayinfo = info
         self._saytime = delay
-        self._begin_bubble_time = time.time()        
+        self._begin_bubble_time = time.time()
+        #  用于改变位置了才重画的三个变量
         self._oldsay_x = self.xcor()
         self._oldsay_y = self.ycor()
-        self._oldbox = self.bbox()   
+        self._oldbox = self.bbox()   # 绑定盒变了也要重画
         self._redraw_say()
         self._wait_say()
-        
+        # 如果wait为真，则阻塞程序的运行
         if wait :               
            while time.time() - self._begin_bubble_time < self._saytime:
               print
@@ -1340,13 +1384,13 @@ class Sprite(Turtle):
         self._draw_bubble_turtle._undobuffersize = None
         self._draw_bubble_turtle.undobuffer = None
 
-        sc.cv.delete(self._draw_bubble_turtle.turtle._item) 
+        sc.cv.delete(self._draw_bubble_turtle.turtle._item) # 从画布上删除说话泡泡的形状(虽然它是隐藏的)
         self._draw_bubble_turtle.turtle = None 
-        sc.cv.delete(self.turtle._item)                     
+        sc.cv.delete(self.turtle._item)                     # 从画布上删除自己的形状
         self.turtle = None
         
         self._tag = None
-        sc._turtles.remove(self)                            
+        sc._turtles.remove(self)                            # 在屏幕的_turtles列表中移除自己
         for group in self.screen._groups:
            if self in group:group.remove(self)
         
@@ -1384,6 +1428,7 @@ class Sprite(Turtle):
     
     def stampmove(self,sitem,dx,dy):
         """移动图章dx和dy的距离，别名movestamp"""
+        #shape = self.screen._shapes[self.turtle.shapeIndex]
           
         if sitem not in self.stampItems: return
         
@@ -1393,7 +1438,7 @@ class Sprite(Turtle):
         if isinstance(sitem,int):
             self.screen.cv.move(sitem,xscale * dx,- yscale * dy)
         else:
-          
+          # 否则是复合图形
           for item in sitem:
             self.screen.cv.move(item,xscale * dx,- yscale * dy)
             
@@ -1450,10 +1495,10 @@ class Sprite(Turtle):
         c3 = top > sh//2
         c4 = bottom < -sh//2
         
-        if (c1 or c2) and (c3 or c4): 
+        if (c1 or c2) and (c3 or c4): # 同时碰到反转
             self.right(180)
             return
-        if c1 or c2:                  
+        if c1 or c2:                  # 根据screen模式需要加代码
           self.setheading(180-hd)
           return 
         elif c3 or c4:
@@ -1488,11 +1533,12 @@ class Sprite(Turtle):
 
         turtle = self.turtle
         self.screen = None
-        self.turtle = None  
-       
+        self.turtle = None  # too make self deepcopy-able
+
+        # added，对象不能深度复制，所以需要先保存，清为None，再deepcopy
         old_draw_bubble_turtle = self._draw_bubble_turtle
         old_im = self._im
-        self._draw_bubble_turtle = None 
+        self._draw_bubble_turtle = None # too make self deepcopy-able
         self._im = None
         
         q = deepcopy(self)
@@ -1509,12 +1555,13 @@ class Sprite(Turtle):
 
         # added
         q.im = old_im
-        q._draw_bubble_turtle = Turtle(visible=False) 
+        q._draw_bubble_turtle = Turtle(visible=False) # 用来画框写字的龟
         screen._turtles.remove(q._draw_bubble_turtle)
-        q._draw_bubble_turtle.up()                     
-        q._draw_bubble_turtle.speed(0)                     
-        q._draw_bubble_turtle.pensize(2)        
-        q._draw_bubble_turtle.tag = 'bubble'                 
+        q._draw_bubble_turtle.up()                    # 抬起笔来        
+        q._draw_bubble_turtle.speed(0)                # 速度最快        
+        q._draw_bubble_turtle.pensize(2)
+        # 以下防止在使用screen.mode调用reset时显示出来用的
+        q._draw_bubble_turtle.tag = 'bubble'          # 标志为说话泡泡海龟        
 
         screen._turtles.append(q)
         ttype = screen._shapes[self.turtle.shapeIndex]._type
@@ -1550,21 +1597,27 @@ class Sprite(Turtle):
         if delay != None:
            self.screen.ontimer(self.showturtle,int(abs(delay)*1000))
 
+    def wait(self,delay=0.01):
+        start_time = time.time()
+        while time.time() - start_time < delay:
+              print
+              self.screen.update()
 
-    collide_mouse = collidemouse    
-    movestamp = stampmove           
-    randompos = gotorandom          
-    randomposition = gotorandom     
-    random_pos = gotorandom         
-    random_position = gotorandom     
-    goto_random = gotorandom        
-    collide_mouse = collidemouse    
-    collide_group = collide_others  
-    setalpha = set_alpha            
-    getalpha = get_alpha            
-    costumeindex = shapeindex       
-    nextcostume = nextshape         
-    previouscostume = previousshape 
+
+    collide_mouse = collidemouse    # 碰到鼠标指针
+    movestamp = stampmove           # 移动图章
+    randompos = gotorandom          # 随机坐标
+    randomposition = gotorandom     # 随机坐标
+    random_pos = gotorandom         # 随机坐标
+    random_position = gotorandom    # 随机坐标 
+    goto_random = gotorandom        # 随机坐标
+    collide_mouse = collidemouse    # 碰撞鼠标指针
+    collide_group = collide_others  # 碰到其它角色
+    setalpha = set_alpha            # 设置透明度值
+    getalpha = get_alpha            # 获取透明度值
+    costumeindex = shapeindex       # 设定造型编号
+    nextcostume = nextshape         # 下一个造型
+    previouscostume = previousshape # 上一个造型
 
 # 定义类的别名
 Js  = Sprite
@@ -1606,21 +1659,25 @@ class Mouse:
     def down(self):
       return self._down
     
-print("import successful! writed by lixingqiu,email:406273900@qq.com")
+print("import successful! personal research use only,email:406273900@qq.com")
 
 if __name__ == "__main__":  
     
     screen = Screen()
-    screen.setup(800,600)
+    screen.setup(480,360)
+    screen.bgpic('res/sky.png')
 
     frames = 'res/cat1.png','res/cat2.png'
+
     cat = Sprite(shape=frames)
 
     while True:
       cat.fd(10)
       cat.nextcostume()
+      cat.wait(0.5)
       cat.bounce_on_edge()
-      time.sleep(0.2)
+
+    
    
         
      

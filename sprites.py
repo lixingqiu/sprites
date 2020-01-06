@@ -35,22 +35,27 @@
    21、stamp：重定义了Turtle类的图章方法，新增的参数可以让图章在一定时间后自动被清除，异步执行。
    22、stampmove：根据图章编号水平和垂直移动图章。
    23、stampgoto：移动图章编号到指定坐标，暂不支持复合图形的图章，它们的图章编号是一个元组。
-   24、play：播放方法，目前只支持播放无损压缩的wav音频文件，支持显示歌词。
-   25、setalpha：设置透明度方法。参数为从0到255的数值。0代表完全透明，255代表不透明，128代表半透明。
+   24、stampcors：获取图章的坐标。
+   25、stampbbox：获取图章的绑定盒。
+   26、stampcollide：图章和另一个图章或精灵对象的碰撞检测。
+   
+   27、play：播放方法，目前只支持播放无损压缩的wav音频文件，支持显示歌词。
+   28、setalpha：设置透明度方法。参数为从0到255的数值。0代表完全透明，255代表不透明，128代表半透明。
        对于polygon和compound造型来说，0代表透明，非0代表不透明。对于image来说，设置角色的透明度从0到255的值就会产生从透明到不透明的渐变效果。
-   26、getalpha：得到透明度，从0到255的整数。
-   27、set_tag：设置角色的标签。它是一个字符串，用于分组。
-   28、get_tag：获取角色的标签。
-   29、say：说话方法，会显示气泡。默认时间为2秒，默认阻塞进程。
-   30、saycolor：返回或设置说话的字的颜色。
-   31、saybordercolor：返回或设置说话泡泡的边框颜色。   
-   32、write：重定义写方法，增加angle参数，可以写斜字，默认为黑体，12号。
-   33、reborn：“重生”方法，让角色隐藏后在另一坐标重新显示。复用角色之用，可加delay参数，意为在一定的时间后才显示，异步执行。
-   34、nextcostume：下一个造型，别名是nextshape。
-   35、previouscostume：上一个造型，别名是previousshape。
-   36、costumeindex：指定造型编号，别名是shapeindex。
-   37、update：重绘角色。
-
+   29、getalpha：得到透明度，从0到255的整数。
+   30、set_tag：设置角色的标签。它是一个字符串，用于分组。
+   31、get_tag：获取角色的标签。
+   32、say：说话方法，会显示气泡。默认时间为2秒，默认阻塞进程。
+   33、saycolor：返回或设置说话的字的颜色。
+   34、saybordercolor：返回或设置说话泡泡的边框颜色。   
+   35、write：重定义写方法，增加angle参数，可以写斜字，默认为黑体，12号。
+   36、reborn：“重生”方法，让角色隐藏后在另一坐标重新显示。复用角色之用，可加delay参数，意为在一定的时间后才显示，异步执行。
+   37、nextcostume：下一个造型，别名是nextshape。
+   38、previouscostume：上一个造型，别名是previousshape。
+   39、costumeindex：指定造型编号，别名是shapeindex。
+   40、update：重绘角色。
+   41、wait：方法，等待一定的时间，以秒为单位。
+   
    三、screen新增命令：
    
    1、resizable：默认窗口是不可变大小的，用这个命令能让窗口重新可缩放。
@@ -78,10 +83,9 @@
    新增屏幕的_focus属性，用来跟踪屏幕是否激活。
    
    注意以下问题：
-   1、不支持复合图形的拖动。
-   2、不支持多边形与复合图形所盖的章的直接坐标定位，但是可以相对移动。
-   3、tilt倾斜等变形命令不会对图形进行变形。
-   4、用精灵的remove方法可以较彻底的删除精灵对象，但对象越多还是会越来越慢，解决方案是让对象重复使用！
+   1、不支持复合图形的拖动。   
+   2、tilt倾斜等变形命令不会对图形进行变形。
+   3、用精灵的remove方法可以较彻底的删除精灵对象，但对象越多还是会越来越慢，解决方案是让对象重复使用！
    典型的为角色超出边界后，并不需要remove它。可以让它隔一段时间再出现即可，不要不停地实例化新对象！
 
    如果用屏幕的tracer(0,0)关闭了自动渲染角色,那么在移动角色后要马上刷新屏幕,否则会出现意外效果。  
@@ -115,10 +119,10 @@ import colorsys
 import numpy as np
 from io import BytesIO
 from copy import deepcopy
-from winsound import PlaySound,SND_ASYNC
+from winsound import PlaySound,SND_ASYNC,SND_LOOP
 from turtle import TK,_Root,_CFG ,TNavigator,Tbuffer,TPen,_Screen,Screen,Turtle,Vec2D, RawTurtle,TurtleScreenBase,Shape,TurtleScreen,_TurtleImage,TurtleGraphicsError 
 
-_VERSION = 1.01
+_VERSION = 1.12
 _CFG['delay'] = 0
 # 定义资源文件夹
 _resfld = os.path.join(os.getcwd(),'res')
@@ -277,7 +281,7 @@ def _move(self,dx=0,dy=0):
 RawTurtle.move = _move
 
 # 给原生海龟对象增加play方法
-def RawTurtle_play(self,song_file,lrc_file=None,fontstyle=("",24,"normal") ):
+def RawTurtle_play(self,song_file,lrc_file=None,fontstyle=("",24,"normal"),loop=False ):
     """在海龟屏幕显示歌词并播放歌曲，本函数只支持无损wav文件。
        self：海龟对象或其子类的实例
        song_file：歌曲文件
@@ -285,13 +289,20 @@ def RawTurtle_play(self,song_file,lrc_file=None,fontstyle=("",24,"normal") ):
                                  [01:00.12]红藕香残 玉簟秋
        上面这样的歌词文件。
        fontstyle为三元组，表示用write写字时的字体风格。
+       loop:为假示不循环播放,为True表示循环播放
     """
-    PlaySound(song_file, SND_ASYNC)    # 异步播放音效
-    if lrc_file==None:return           # 无歌词文件则返回
-    
-    f = open(lrc_file)                 # 打开歌词文件
-    words_=f.readlines()               # 读取歌词文件
-    f.close()                          # 关闭文件
+    if loop == True:
+        PlaySound(song_file, SND_ASYNC|SND_LOOP)# 异步循环播放音效
+    else:
+        PlaySound(song_file, SND_ASYNC)         # 异步播放音效
+    if lrc_file==None:return                    # 无歌词文件则返回
+
+    if not os.path.exists(lrc_file):
+       print("歌词文件没有找到!")
+       return
+    f = open(lrc_file)                          # 打开歌词文件
+    words_=f.readlines()                        # 读取歌词文件
+    f.close()                                   # 关闭文件
     
     # 正则表达式检测歌词文件内容
     reg='\[\d\d:\d\d\.\d\d\]'
@@ -340,7 +351,7 @@ def RawTurtle_play(self,song_file,lrc_file=None,fontstyle=("",24,"normal") ):
             self.color(fgcolor)
             self.write(display_words_,align='center',font=fontstyle)    
             words_index=words_index+1            
-        if words_index<words_lines:        
+        if words_index < words_lines:        
             self.screen.ontimer(display_subtitle,100)
     # 调用显示标题的函数
     display_subtitle()
@@ -428,8 +439,10 @@ def _Screen__init__(self):
           self.setup(width, height, leftright, topbottom)
           
       # 屏幕的_groups属性是保存组名的
-      self._groups = []           # 这里给screen增加了_groups属性
-      self._focus = True          # 描述窗口是否失去焦点的逻辑属性
+      self._groups = []               # 这里给screen增加了_groups属性
+      self._focus = True              # 描述窗口是否失去焦点的逻辑属性      
+      self._ontimer_call_times = 25   # 定时器最多调用次数
+      self._ontimer_call_counter = 0  # 定时器调用次数跟踪器
       self._root.bind("<FocusIn>", self.got_focus)
       self._root.bind("<FocusOut>", self.lost_focus)
       
@@ -920,8 +933,10 @@ class Sprite(Turtle):
         """        
         self._initend = False                           # 表示初始化开始
         Turtle.__init__(self,visible=False,undobuffersize=undobuffersize,shape='blank')
+        self._stampcors = { }                           # 记录每个图章坐标的字典，键为图章编号 
         self._rotatemode = 0                            # 设定旋转模式，0:360度旋转,1:左右翻转,2:不旋转
-        self._im = None                                 # 存储当前原始图形的im属性      
+        self._im = None                                 # 存储当前原始图形的im属性
+        self._imflag = None
         
         if isinstance(shape,int):
            shape = min(len(_built_in_images)-1, max(0, shape))
@@ -968,7 +983,7 @@ class Sprite(Turtle):
         self._draw_bubble_turtle._tag = 'bubble'         # 标志为说话泡泡海龟
         self.set_tag(tag)                                # 设置标签
         self._initend = True                             # 表示初始化结束
-        
+
     def set_alpha(self,alpha,delay=None):
          """设置alpha值，它是从0到255的值。
             表示图像的透明度，如果不是图像，0代表透明，非0代表不透明。
@@ -979,8 +994,14 @@ class Sprite(Turtle):
          self._alpha = alpha
          self._rotate(0)
          # 下面设置当delay有数值的时候让角色过一段时间又恢复原来的透明度
-         if delay!=None:
-            self.screen.ontimer(lambda:self.set_alpha(self._oldalpha),int(abs(delay)*1000))
+         if delay!=None:            
+            if self.screen._ontimer_call_counter < self.screen._ontimer_call_times :
+               self.screen._ontimer_call_counter += 1      # 限定ontimer最多调用次数
+               self.screen.ontimer(lambda:self.set_alpha(self._oldalpha),int(abs(delay)*1000))
+            else:
+               print('超过最大异步执行次数，本次延时恢复透明度无效！')
+         else:
+            self.screen._ontimer_call_counter -= 1
 
     def get_alpha(self):
          """得到alpha值，它是从0到255的值。"""
@@ -1048,16 +1069,20 @@ class Sprite(Turtle):
         if self._costumebasename not in Sprite.imdict:   # 不在这个字典中则第一次加载
             self._im = Image.open(image)
             self._im = self._im.convert('RGBA')
+            self._imflag = str(self._im).split()[-1][:-1]# 图像内存地址字符串
             # for rotatemode 
-            im_mirror = ImageOps.mirror(self._im) # 镜像造形
-            self.rightleftcostume = [self._im,im_mirror]
+            im_mirror = ImageOps.mirror(self._im)        # 镜像造形
+            self.rightleftcostume = [self._im,im_mirror] # 左右两个造型表
             Sprite.imdict[self._costumebasename] = [self._im,im_mirror]           
         else:                              # 在这个字典中,则不读文件,直接从字典中取数据
-            self._im = Sprite.imdict[self._costumebasename][0]             # 向右造型            
-            self.rightleftcostume =  Sprite.imdict[self._costumebasename] #  向右向左造型
+            self._im = Sprite.imdict[self._costumebasename][0].copy()    # 向右造型
+            self._imflag = str(self._im).split()[-1][:-1]
+            im_mirror = Sprite.imdict[self._costumebasename][1].copy()   # 向左造型
+            self.rightleftcostume =  [self._im,im_mirror]                # 向右向左造型
+            
             
     def _make_shape_name(self,_wid,_len):
-         name = "_".join([ _wid,_len, str(self._orient), str(self._alpha) ,self._costumebasename])
+         name = "_".join([ _wid,_len, str(self._orient), str(self._alpha) ,self._imflag,self._costumebasename])
          return name
         
     def shape(self,name=None):
@@ -1205,7 +1230,8 @@ class Sprite(Turtle):
     def collide(self,other,scale=1):
         """和其它对象的矩形碰撞检测，
            other：是海龟对象或者一个项目item编号，如图章编号。
-           scale：绑定盒的缩放系数
+           scale：other绑定盒的缩放系数
+           
         """        
         # 自己的左上右下值
         x0,y0,x1,y1 = self.bbox()
@@ -1227,6 +1253,34 @@ class Sprite(Turtle):
 
         nocollide = _right0 <= _left1 or _left0 >= _right1 or \
                     _bottom0 >= _top1 or _top0 <= _bottom1
+        return not nocollide
+      
+    def stampcollide(self,item,other,scale=1):
+        """
+           图章item和other对象的碰撞检测
+           item：图章编号
+           other：其它图章或精灵对象，如果other是其它图章的编号，
+           那么它可能是一个整数或元组，否则它是一个精灵实例。
+           scale：other的绑定盒的缩放系数
+        """
+        if item == other : return True
+        
+        box = self.bbox(item)   # 图章的绑定盒
+        if box == None :return
+        _left0,_top0,_right0,_bottom0 = box
+
+        if isinstance(other,int) or isinstance(other,tuple): # 如果other是图章
+           item = other
+        else:                                                # 否则是一个精灵对象
+           item = other.turtle._item
+          
+        box = self.bbox(item,scale=scale)
+        if box == None :return
+        _left1,_top1,_right1,_bottom1 = box
+
+        nocollide = _right0 <= _left1 or _left0 >= _right1 or \
+                    _bottom0 >= _top1 or _top0 <= _bottom1
+        
         return not nocollide        
         
     def heading(self,other=None):
@@ -1323,6 +1377,23 @@ class Sprite(Turtle):
     def say(self,info='你好',delay=2,wait=True):
         """在头顶上显示要说的话 ,默认为阻塞进程。"""
         if len(info)<6:info = "  " + info + "  "
+        if self._sayend == False:     # 如果上次还没说完又调用了say,(说明wait为False)
+           self._sayend = True
+           self._sayinfo = info
+           self._saytime = delay
+           self._begin_bubble_time = time.time()
+           #  用于改变位置了才重画的三个变量
+           self._oldsay_x = self.xcor()
+           self._oldsay_y = self.ycor()
+           self._oldbox = self.bbox()   # 绑定盒变了也要重画
+           self._redraw_say()
+           self._sayend = False          # 描述说话是否结束
+           self._wait_say()
+           if wait :               
+             while time.time() - self._begin_bubble_time < self._saytime:
+                print
+                self.screen.update()
+           return
         self._sayend = False          # 描述说话是否结束
         self._sayinfo = info
         self._saytime = delay
@@ -1358,7 +1429,10 @@ class Sprite(Turtle):
         
         sc = self.screen
         if self not in sc._turtles:return
-        
+         # 在造型字典中删除这个角色所有存在过的造型
+        if  self._imflag is not None:
+           [self.screen._shapes.pop(sp) for sp in self.screen._shapes.copy()  if self._imflag in sp]
+         
         self.drawingLineItem = None        
         self._poly = None
         self._creatingPoly = False
@@ -1393,6 +1467,7 @@ class Sprite(Turtle):
         sc._turtles.remove(self)                            # 在屏幕的_turtles列表中移除自己
         for group in self.screen._groups:
            if self in group:group.remove(self)
+       
         
        
     def reborn(self,x,y,dx=0,dy=0,delay=None):
@@ -1406,10 +1481,16 @@ class Sprite(Turtle):
         self.goto(x,y)
         if delay==None:self.showturtle()
         
-    def stampcors(self,sitem):
+    def stampbbox(self,sitem):
         """返回图章的left,top,right,bottom值"""
         if sitem not in self.stampItems: return
         return self.bbox(sitem)
+      
+    def stampcors(self,sitem):
+        """返回图章的中心点坐标值"""
+        if sitem not in self.stampItems: return
+        x,y = self._stampcors[sitem]           
+        return x,y 
     
     def stampgoto(self,sitem,x,y):
         """图章定位到x,y坐标"""
@@ -1417,39 +1498,70 @@ class Sprite(Turtle):
         if sitem not in self.stampItems: return
         
         shape = self.screen._shapes[self.turtle.shapeIndex]
-        #print(shape._type)
-        if shape._type == 'image':         
-           canvas = self.screen.cv
-           xscale = self.screen.xscale
-           yscale = self.screen.yscale           
+        canvas = self.screen.cv
+        xscale = self.screen.xscale
+        yscale = self.screen.yscale        
+        oldx,oldy = self.stampcors(sitem)      # 从_stampcors字典取出老的坐标
+        dx = x - oldx                          # 算出相对水平距离
+        dy = y - oldy                          # 算出相对垂直距离          
+        if shape._type == 'image':                     
            canvas.coords(sitem,(x * xscale, - y * yscale))
-        else:
-          print('stampgoto method only support image,stampgoto只支持图像!)')
+        elif shape._type == 'polygon':
+          points = self.screen._pointlist(sitem) # 多边形每个顶点
+          points = [ (xscale * (x+dx),-yscale * (y+dy)) for (x,y) in points]
+          dots = []
+          for x0,y0 in points:
+             dots.append(x0)
+             dots.append(y0)          
+          canvas.coords(sitem,dots)         
+          
+        elif shape._type == 'compound':
+          for item in sitem:
+              points = self.screen._pointlist(item) # 多边形每个顶点
+              points = [ (xscale * (x+dx),-yscale * (y+dy)) for (x,y) in points]
+              dots = []
+              for x0,y0 in points:
+                 dots.append(x0)
+                 dots.append(y0)          
+              canvas.coords(item,dots)
+        self._stampcors[sitem] = x,y
     
     def stampmove(self,sitem,dx,dy):
         """移动图章dx和dy的距离，别名movestamp"""
-        #shape = self.screen._shapes[self.turtle.shapeIndex]
-          
         if sitem not in self.stampItems: return
         
         xscale = self.screen.xscale
         yscale = self.screen.yscale
         
-        if isinstance(sitem,int):
+        if isinstance(sitem,int):   # image和polygon的item号都是整数
             self.screen.cv.move(sitem,xscale * dx,- yscale * dy)
         else:
           # 否则是复合图形
           for item in sitem:
             self.screen.cv.move(item,xscale * dx,- yscale * dy)
-            
+
+        x,y = self._stampcors[sitem]                        # 取出坐标
+        self._stampcors[sitem] = x + xscale * dx , y + yscale * dy  # 跟踪坐标
+
+      
     def stamp(self,delay=None):
-        """盖图章，并返回图章编号，如果delay不为None，
-           则会在delay秒后自动清除图章
+        """盖图章，并返回图章编号，它可能是一个整数也可能是个元组。
+           如果delay不为None，则会在delay秒后自动清除图章
         """
         stitem = Turtle.stamp(self)
-        if delay != None:
-          self.screen.ontimer(lambda:self.clearstamp(stitem),int(abs(delay)*1000))
+        self._stampcors[stitem] = self.position()    # 初始坐标
+        
+        if delay != None:     
+               self.screen.ontimer(lambda:self.clearstamp(stitem),int(abs(delay)*1000))         
         return stitem
+      
+    def clearstamp(self, stampid):
+        """根据给定的图章编号删除图章,这是重定义的方法。
+        """
+        self._clearstamp(stampid)
+        if stampid in self._stampcors:
+           self._stampcors.pop(stampid)   # 加上从记录图章坐标的字典中弹出这个图章
+        self._update()
       
     def collide_edge(self,item=None):
         """检测自己或自己的图章是否碰到边缘"""
@@ -1537,7 +1649,15 @@ class Sprite(Turtle):
 
         # added，对象不能深度复制，所以需要先保存，清为None，再deepcopy
         old_draw_bubble_turtle = self._draw_bubble_turtle
-        old_im = self._im
+
+        if self._im == None:
+            old_im = self._im
+        else:
+           if hasattr(self._im,'copy'):
+               old_im = self._im.copy()
+           else:
+               old_im = self._im
+        
         self._draw_bubble_turtle = None # too make self deepcopy-able
         self._im = None
         
@@ -1554,7 +1674,7 @@ class Sprite(Turtle):
         q.turtle = _TurtleImage(screen, self.turtle.shapeIndex)
 
         # added
-        q.im = old_im
+        q._im = old_im
         q._draw_bubble_turtle = Turtle(visible=False) # 用来画框写字的龟
         screen._turtles.remove(q._draw_bubble_turtle)
         q._draw_bubble_turtle.up()                    # 抬起笔来        
@@ -1576,9 +1696,16 @@ class Sprite(Turtle):
         q._update()
         
         q.onclick(q._store, 1)    
-        q.ondrag(q.drag,1)       
+        q.ondrag(q.drag,1)
+
+        q.set_tag(q._tag)
         return q
 
+    def _hidedelay(self):
+        """下面的show方法有delay参数时，延时隐藏调用的，请不要单独调用。"""
+        self.hideturtle()
+        self.screen._ontimer_call_counter -= 1
+        
     def show(self,delay=None):
         """显示角色一定的时间。
            delay：以秒为单位的整数，如果为None，则只是显示。
@@ -1586,7 +1713,16 @@ class Sprite(Turtle):
         """
         self.showturtle()
         if delay != None:
-           self.screen.ontimer(self.hideturtle,int(abs(delay)*1000))
+            if self.screen._ontimer_call_counter < self.screen._ontimer_call_times :
+               self.screen._ontimer_call_counter += 1      
+               self.screen.ontimer(self._hidedelay,int(abs(delay)*1000))
+            else:
+               print('超过最大异步执行次数，本次延时隐藏无效！')
+
+    def _showdelay(self):
+        """下面的hide方法有delay参数时，延时显示调用的，请不要单独调用。"""
+        self.showturtle()
+        self.screen._ontimer_call_counter -= 1
         
     def hide(self,delay=None):
         """隐藏角色一定的时间
@@ -1595,7 +1731,11 @@ class Sprite(Turtle):
         """
         self.hideturtle()
         if delay != None:
-           self.screen.ontimer(self.showturtle,int(abs(delay)*1000))
+            if self.screen._ontimer_call_counter < self.screen._ontimer_call_times :
+               self.screen._ontimer_call_counter += 1      
+               self.screen.ontimer(self._showdelay,int(abs(delay)*1000))
+            else:
+               print('超过最大异步执行次数，本次延时显示无效！')
 
     def wait(self,delay=0.01):
         start_time = time.time()
@@ -1603,7 +1743,70 @@ class Sprite(Turtle):
               print
               self.screen.update()
 
+    def _drawline(self,p1,p2):
+        """画线条的方法"""
+        isdown = self.isdown()           # 记录先前落笔状态
+        self.up()
+        self.goto(p1)
+        self.down()
+        self.goto(p2)
+        # 恢复先前落笔状态
+        if isdown:
+           self.down()
+        else:
+           self.up()
+        
+        
+    def draw_grid(self,dx=100,dy=100):
+      """画格子的方法,自己方便教学之用"""
+      isdown = self.isdown()           # 记录先前落笔状态
+      pos = self.pos()                 # 记录先前坐标
+      
+      width = self.screen.window_width()
+      height = self.screen.window_height()
+      # 画中横线
+      leftcenter = -width/2,0
+      rightcenter = width/2,0
+      self._drawline(leftcenter,rightcenter)
 
+      # 画中竖线
+      bottomcenter = 0,-height/2
+      topcenter = 0,height/2
+      self._drawline(bottomcenter,topcenter)
+
+      # 画上横线
+      for y in range(dy,height//2,dy):
+        p1 = -width/2 ,y
+        p2 = width/2,y
+        self._drawline(p1,p2)
+        
+      # 画下横线
+      for y in range(-dy,-height//2,-dy):
+        p1 = -width/2 ,y
+        p2 = width/2,y
+        self._drawline(p1,p2)
+        
+      # 画右竖线
+      for x in range(dx,width//2,dx):
+        p1 = x,-height/2
+        p2 = x,height/2
+        self._drawline(p1,p2)
+      # 画左竖线
+      for x in range(-dx,-width//2,-dx):
+        p1 = x,-height/2
+        p2 = x,height/2
+        self._drawline(p1,p2)
+      self.penup()        
+
+      # 恢复原来坐标
+      self.goto(pos)
+      # 恢复先前落笔状态
+      if isdown:
+        self.down()
+      else:
+        self.up()
+
+          
     collide_mouse = collidemouse    # 碰到鼠标指针
     movestamp = stampmove           # 移动图章
     randompos = gotorandom          # 随机坐标
@@ -1618,6 +1821,7 @@ class Sprite(Turtle):
     costumeindex = shapeindex       # 设定造型编号
     nextcostume = nextshape         # 下一个造型
     previouscostume = previousshape # 上一个造型
+    
 
 # 定义类的别名
 Js  = Sprite
@@ -1662,21 +1866,16 @@ class Mouse:
 print("import successful! personal research use only,email:406273900@qq.com")
 
 if __name__ == "__main__":  
-    
+
+    width,height = 480,360
     screen = Screen()
-    screen.setup(480,360)
-    screen.bgpic('res/sky.png')
-
-    frames = 'res/cat1.png','res/cat2.png'
-
-    cat = Sprite(shape=frames)
-
-    while True:
-      cat.fd(10)
-      cat.nextcostume()
-      cat.wait(0.5)
-      cat.bounce_on_edge()
-
+    t = Sprite(pos=(100,100),tag='abcd')
+    t.right(99)
+    ag = Group('abcd')
+    print(screen._groups)
+    print(screen._shapes)
+    t.remove()
+    print(screen._shapes)
     
    
         

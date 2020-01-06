@@ -109,5 +109,6 @@ sprites module Developer: Li Xingqiu，email:406273900@qq.com,Pingxiang, Jiangxi
    32、nextcostume：下一个造型，别名是nextshape。
    33、previouscostume：下一个造型，别名是nextshape。
    34、costumeindex：指定造型编号，别名是shapeindex。
+   35、wait：等待命令。
 
 开发者：李兴球，微信： scratch8，电子信箱:406273900，网址 : www.lixingqiu.com，江西萍乡安源区
